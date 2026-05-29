@@ -1,5 +1,7 @@
+"use client";
 import { PageHeader } from "@/components/PageHeader";
 import { Heart } from "lucide-react";
+import { useTripStore } from "@/lib/store";
 
 const saved = [
   { dest: "Istanbul, Türkiye", days: 5, photo: "https://images.unsplash.com/photo-1524231757912-21f4fe3a7200?auto=format&fit=crop&w=900&q=80" },
@@ -9,11 +11,20 @@ const saved = [
 ];
 
 export default function SavedPage() {
+  const { savedTrips } = useTripStore();
+  const list = savedTrips.length
+    ? savedTrips.map((t) => ({
+        dest: `${t.destination}, ${t.country}`,
+        days: t.days,
+        photo: t.coverImage,
+        summary: t.summary
+      }))
+    : saved;
   return (
     <div className="max-w-6xl mx-auto">
       <PageHeader title="Saved Trips" subtitle="Drafts and favorites you can revisit anytime." />
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        {saved.map((t) => (
+        {list.map((t) => (
           <div key={t.dest} className="card overflow-hidden hover:shadow-pop cursor-pointer">
             <div className="relative">
               <img src={t.photo} className="w-full h-36 object-cover" alt={t.dest} />
@@ -22,6 +33,7 @@ export default function SavedPage() {
             <div className="p-3">
               <p className="font-semibold">{t.dest}</p>
               <p className="text-xs text-muted">{t.days}-day itinerary</p>
+              {t.summary && <p className="text-xs text-muted mt-1 line-clamp-2">{t.summary}</p>}
             </div>
           </div>
         ))}
