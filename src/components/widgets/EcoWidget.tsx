@@ -23,6 +23,8 @@ export function EcoWidget() {
   const circumference = 2 * Math.PI * r;
   const offset = circumference - (trip.ecoScore / 100) * circumference;
   const status = trip.ecoScore >= 75 ? "Good Choice!" : trip.ecoScore >= 50 ? "Decent" : "Could be Better";
+  const tier = getEcoTier(trip.ecoScore);
+  const goal = getEcoGoal(trip.ecoScore);
 
   return (
     <div className="card p-5">
@@ -86,6 +88,26 @@ export function EcoWidget() {
         </div>
       </div>
 
+      <div className="mt-4 rounded-btn border border-line p-3">
+        <div className="flex items-center justify-between">
+          <p className="text-xs text-muted">Community Ranking</p>
+          <span className="pill bg-brand-green-soft text-brand-green-600">{tier.rankLabel}</span>
+        </div>
+        <p className="text-sm font-semibold text-brand-ink mt-1">{tier.title}</p>
+        <p className="text-xs text-muted">{tier.description}</p>
+      </div>
+
+      <div className="mt-3 rounded-btn border border-line p-3">
+        <div className="flex items-center justify-between">
+          <p className="text-xs text-muted">Eco Goal Progress</p>
+          <span className="text-xs font-semibold text-brand-green-600">{goal.label}</span>
+        </div>
+        <div className="h-2 rounded-pill bg-bg overflow-hidden mt-2">
+          <div className="h-full bg-brand-green-500 rounded-pill" style={{ width: `${goal.progress}%` }} />
+        </div>
+        <p className="text-xs text-muted mt-2">{goal.detail}</p>
+      </div>
+
       <div className="mt-4">
         <p className="text-xs font-semibold uppercase tracking-wide text-muted mb-2">Eco Tips for You</p>
         <ul className="space-y-2">
@@ -111,4 +133,62 @@ export function EcoWidget() {
       </button>
     </div>
   );
+}
+
+function getEcoTier(score: number) {
+  if (score >= 80) {
+    return {
+      title: "Top 8% Eco Travelers",
+      rankLabel: "#1,284",
+      description: "You are outperforming most travelers on carbon impact."
+    };
+  }
+  if (score >= 60) {
+    return {
+      title: "Top 25% Eco Travelers",
+      rankLabel: "#6,912",
+      description: "Strong eco habits with room to climb higher."
+    };
+  }
+  if (score >= 40) {
+    return {
+      title: "Top 48% Eco Travelers",
+      rankLabel: "#14,402",
+      description: "Mid-pack performance. Small swaps can boost your rank."
+    };
+  }
+  return {
+    title: "Top 72% Eco Travelers",
+    rankLabel: "#22,894",
+    description: "High impact trip. Eco improvements will move you up fast."
+  };
+}
+
+function getEcoGoal(score: number) {
+  if (score >= 80) {
+    return {
+      label: "On track",
+      progress: 38,
+      detail: "280 / 740 kg CO2 used this year. Goal: stay under 740 kg."
+    };
+  }
+  if (score >= 60) {
+    return {
+      label: "Slightly above",
+      progress: 58,
+      detail: "420 / 780 kg CO2 used. Goal: keep below 780 kg."
+    };
+  }
+  if (score >= 40) {
+    return {
+      label: "Needs improvement",
+      progress: 72,
+      detail: "560 / 820 kg CO2 used. Goal: bring it under 820 kg."
+    };
+  }
+  return {
+    label: "High impact",
+    progress: 86,
+    detail: "720 / 900 kg CO2 used. Goal: lower to 900 kg or less."
+  };
 }
