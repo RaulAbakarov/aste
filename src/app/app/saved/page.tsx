@@ -3,7 +3,9 @@ import { PageHeader } from "@/components/PageHeader";
 import { Heart } from "lucide-react";
 import { useTripStore } from "@/lib/store";
 
-const saved = [
+type SavedCard = { dest: string; days: number; photo: string; summary?: string };
+
+const saved: SavedCard[] = [
   { dest: "Istanbul, Türkiye", days: 5, photo: "https://images.unsplash.com/photo-1524231757912-21f4fe3a7200?auto=format&fit=crop&w=900&q=80" },
   { dest: "Paris, France", days: 4, photo: "https://images.unsplash.com/photo-1502602898657-3e91760cbb34?auto=format&fit=crop&w=900&q=80" },
   { dest: "Tokyo, Japan", days: 7, photo: "https://images.unsplash.com/photo-1542051841857-5f90071e7989?auto=format&fit=crop&w=900&q=80" },
@@ -12,7 +14,7 @@ const saved = [
 
 export default function SavedPage() {
   const { savedTrips } = useTripStore();
-  const list = savedTrips.length
+  const list: SavedCard[] = savedTrips.length
     ? savedTrips.map((t) => ({
         dest: `${t.destination}, ${t.country}`,
         days: t.days,
