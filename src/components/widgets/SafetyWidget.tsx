@@ -3,6 +3,8 @@ import { ShieldCheck, Phone, Hospital, Siren, MapPin } from "lucide-react";
 import { useTripStore } from "@/lib/store";
 import { useState } from "react";
 import { Modal } from "../Modal";
+import { SafetyMapWrapper } from "./SafetyMapWrapper";
+import { getSafetyPoints } from "@/lib/safetyMap";
 
 export function SafetyWidget() {
   const { trip } = useTripStore();
@@ -19,6 +21,10 @@ export function SafetyWidget() {
     );
   }
   const s = trip.safety;
+  const points = getSafetyPoints(trip);
+  const hospitals = points.filter((p) => p.type === "hospital");
+  const police = points.filter((p) => p.type === "police");
+  const parks = points.filter((p) => p.type === "park");
   const statusTone =
     s.status === "safe" ? "bg-brand-green-soft/70 border-brand-green-500/20" :
     s.status === "caution" ? "bg-amber-50 border-amber-200" :
@@ -81,17 +87,34 @@ export function SafetyWidget() {
 
       <Modal open={open} title="Safety Map" onClose={() => setOpen(false)}>
         <div className="space-y-3">
-          <div className="rounded-card border border-line bg-bg h-40 flex items-center justify-center text-sm text-muted">
-            Map overlay with hospitals, police, embassies, and safe zones
-          </div>
+          <SafetyMapWrapper trip={trip} />
           <div className="grid gap-2 text-sm">
-            <div className="flex items-center justify-between rounded-btn border border-line px-3 py-2">
-              <span>Nearest Hospital</span>
-              <span className="font-semibold">{s.nearestHospital.distanceKm} km</span>
+            <div className="rounded-btn border border-line px-3 py-2">
+              <p className="text-xs text-muted">Hospitals</p>
+              {hospitals.map((h) => (
+                <div key={h.id} className="flex items-center justify-between text-sm">
+                  <span>{h.label}</span>
+                  <span className="font-semibold">{h.distanceKm} km</span>
+                </div>
+              ))}
             </div>
-            <div className="flex items-center justify-between rounded-btn border border-line px-3 py-2">
-              <span>Nearest Police</span>
-              <span className="font-semibold">{s.nearestPolice.distanceKm} km</span>
+            <div className="rounded-btn border border-line px-3 py-2">
+              <p className="text-xs text-muted">Police Stations</p>
+              {police.map((p) => (
+                <div key={p.id} className="flex items-center justify-between text-sm">
+                  <span>{p.label}</span>
+                  <span className="font-semibold">{p.distanceKm} km</span>
+                </div>
+              ))}
+            </div>
+            <div className="rounded-btn border border-line px-3 py-2">
+              <p className="text-xs text-muted">Safe Parks</p>
+              {parks.map((p) => (
+                <div key={p.id} className="flex items-center justify-between text-sm">
+                  <span>{p.label}</span>
+                  <span className="font-semibold">{p.distanceKm} km</span>
+                </div>
+              ))}
             </div>
             <div className="flex items-center justify-between rounded-btn border border-line px-3 py-2">
               <span>Embassy Hotline</span>
