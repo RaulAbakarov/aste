@@ -5,6 +5,7 @@ import { TripTabs } from "./TripTabs";
 import { DayCard } from "./DayCard";
 import { TripBudget } from "./TripBudget";
 import { TripMapWrapper } from "./TripMapWrapper";
+import { TripInsights } from "./TripInsights";
 import { Sparkles, Plane } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
 import { useState } from "react";
@@ -53,6 +54,7 @@ export function TripDisplay() {
       <TripTabs />
       {activeTab === "itinerary" && (
         <div className="grid gap-3">
+          <TripInsights trip={trip} />
           {trip.days.map((d, i) => (
             <DayCard key={d.day} day={d} index={i} currency={trip.currency} />
           ))}

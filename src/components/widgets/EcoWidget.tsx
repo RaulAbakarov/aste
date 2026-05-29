@@ -67,6 +67,25 @@ export function EcoWidget() {
         <span className="pill bg-brand-green-soft text-brand-green-600">Low Impact</span>
       </div>
 
+      <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
+        <div className="rounded-btn border border-line px-3 py-2">
+          <p className="text-muted">Green Transport</p>
+          <p className="font-semibold text-brand-ink">{trip.eco.greenTransportScore}/100</p>
+        </div>
+        <div className="rounded-btn border border-line px-3 py-2">
+          <p className="text-muted">Local Business</p>
+          <p className="font-semibold text-brand-ink">{trip.eco.localBusinessScore}/100</p>
+        </div>
+        <div className="rounded-btn border border-line px-3 py-2">
+          <p className="text-muted">Certified Stays</p>
+          <p className="font-semibold text-brand-ink">{trip.eco.certifiedStays}</p>
+        </div>
+        <div className="rounded-btn border border-line px-3 py-2">
+          <p className="text-muted">Offset Estimate</p>
+          <p className="font-semibold text-brand-ink">${trip.eco.offsetUSD}</p>
+        </div>
+      </div>
+
       <div className="mt-4">
         <p className="text-xs font-semibold uppercase tracking-wide text-muted mb-2">Eco Tips for You</p>
         <ul className="space-y-2">

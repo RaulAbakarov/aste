@@ -15,7 +15,16 @@ const Schema = z.object({
   }),
   budget: z.number().min(50),
   currency: z.string().default("USD"),
-  styles: z.array(z.string())
+  styles: z.array(z.string()),
+  prompt: z.string().optional(),
+  memory: z
+    .object({
+      lastDestination: z.string().optional(),
+      lastBudget: z.number().optional(),
+      lastStyles: z.array(z.string()).optional(),
+      lastPrompt: z.string().optional()
+    })
+    .optional()
 });
 
 export async function POST(req: Request) {

@@ -56,6 +56,22 @@ export function SafetyWidget() {
         />
       </ul>
 
+      <div className="mt-3">
+        <p className="text-xs font-semibold uppercase tracking-wide text-muted mb-2">Live Alerts</p>
+        <div className="space-y-2">
+          {s.alerts.map((a, i) => (
+            <div key={i} className="rounded-btn border border-line px-3 py-2">
+              <p className="text-sm font-semibold text-brand-ink">{a.title}</p>
+              <p className="text-xs text-muted">{a.description}</p>
+            </div>
+          ))}
+        </div>
+        <div className="mt-3 text-xs text-muted">
+          Night risk areas: {s.nightRiskAreas.join(", ")}
+        </div>
+        <div className="text-xs text-muted">Common scams: {s.scamAlerts.join(", ")}</div>
+      </div>
+
       <button
         onClick={() => setOpen(true)}
         className="mt-4 w-full inline-flex items-center justify-center gap-2 rounded-btn bg-brand-blue-500 hover:bg-blue-600 text-white font-semibold px-4 py-2.5 transition"

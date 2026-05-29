@@ -1,4 +1,21 @@
-import type { Trip, TripFormInput, Day, Activity, Experience, EcoTip, SafetyInfo } from "./types";
+import type {
+  Trip,
+  TripFormInput,
+  Day,
+  Activity,
+  Experience,
+  EcoTip,
+  SafetyInfo,
+  PricingSignal,
+  OptimizationTip,
+  HiddenGem,
+  Prediction,
+  CopilotEvent,
+  MarketplaceOffer,
+  UserProfile,
+  TripStyle
+} from "./types";
+import { parsePrompt } from "./prompt";
 
 // Curated destinations with real coordinates and Unsplash photos
 const DESTINATIONS: Record<
@@ -165,19 +182,45 @@ function pickN<T>(arr: T[], n: number, seed: number): T[] {
   return a.slice(0, n);
 }
 
+function mergeStyles(base: TripStyle[], extra: TripStyle[]) {
+  return Array.from(new Set([...(base || []), ...(extra || [])]));
+}
+
+function clamp(value: number, min: number, max: number) {
+  return Math.min(max, Math.max(min, value));
+}
+
+function budgetTier(budget: number) {
+  if (budget < 400) return "Budget";
+  if (budget < 1200) return "Smart";
+  if (budget < 2500) return "Comfort";
+  return "Premium";
+}
+
+function personaFrom(styles: TripStyle[], budget: number) {
+  const tier = budgetTier(budget);
+  if (styles.includes("Luxury")) return `${tier} Luxury Voyager`;
+  if (styles.includes("Eco")) return `${tier} Eco Explorer`;
+  if (styles.includes("Adventure")) return `${tier} Adventure Seeker`;
+  if (styles.includes("Backpacker")) return `${tier} Backpacker`;
+  return `${tier} City Traveler`;
+}
+
 export function generateMockTrip(input: TripFormInput): Trip {
-  const { data, key, matched } = matchDestination(input.to);
+  const prompt = input.prompt?.trim() ?? "";
+  const parsed = parsePrompt(prompt);
+  const resolvedTo = parsed.destination ?? input.to;
+  const resolvedBudget = parsed.budget ?? input.budget;
+  const resolvedCurrency = parsed.currency ?? input.currency;
+  const resolvedStyles = mergeStyles(input.styles, parsed.styles);
+
   const start = new Date(input.startDate);
   const end = new Date(input.endDate);
-  const numDays = Math.max(
-    1,
-    Math.min(
-      14,
-      Math.round((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1
-    )
-  );
+  const defaultDays = Math.round((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+  const numDays = clamp(parsed.days ?? defaultDays, 1, 14);
 
-  const seed = (input.to.length + input.budget + numDays) * 13;
+  const { data, key, matched } = matchDestination(resolvedTo);
+  const seed = (resolvedTo.length + resolvedBudget + numDays + resolvedStyles.length) * 13;
 
   const days: Day[] = [];
   for (let d = 1; d <= numDays; d++) {
@@ -207,10 +250,10 @@ export function generateMockTrip(input: TripFormInput): Trip {
   const totalCost = days.reduce((s, d) => s + d.estimatedCostUSD, 0);
 
   // Eco score: higher for fewer days, low-budget, eco style
-  const ecoBonus = input.styles.includes("Eco") ? 12 : 0;
-  const stylesPenalty = input.styles.includes("Luxury") ? -10 : 0;
+  const ecoBonus = resolvedStyles.includes("Eco") ? 12 : 0;
+  const stylesPenalty = resolvedStyles.includes("Luxury") ? -10 : 0;
   const ecoScore = Math.min(98, Math.max(35, 78 + ecoBonus + stylesPenalty - (numDays - 3) * 2));
-  const carbonKg = Math.round(80 + numDays * 18 + (input.styles.includes("Luxury") ? 40 : 0));
+  const carbonKg = Math.round(80 + numDays * 18 + (resolvedStyles.includes("Luxury") ? 40 : 0));
 
   const ecoTips: EcoTip[] = [
     { tip: "Take the metro instead of taxis for short city hops.", savingKg: 14, icon: "bus" },
@@ -218,11 +261,33 @@ export function generateMockTrip(input: TripFormInput): Trip {
     { tip: "Rent a bike for inner-city exploration.", savingKg: 6, icon: "bike" }
   ];
 
+  const eco = {
+    greenTransportScore: clamp(58 + ecoBonus + (resolvedStyles.includes("Luxury") ? -8 : 6), 35, 96),
+    localBusinessScore: clamp(52 + (resolvedStyles.includes("Culture & Food") ? 16 : 6), 35, 92),
+    certifiedStays: resolvedStyles.includes("Luxury") ? 2 : 1,
+    offsetUSD: Math.round(carbonKg * 0.35)
+  };
+
+  const safetyStatus = resolvedStyles.includes("Nightlife") ? "caution" : "safe";
   const safety: SafetyInfo = {
-    status: "safe",
+    status: safetyStatus,
     emergencyNumber: data.emergencyNumber,
     nearestHospital: { name: "City Central Hospital", distanceKm: 1.2 },
-    nearestPolice: { name: "Central Police Station", distanceKm: 0.8 }
+    nearestPolice: { name: "Central Police Station", distanceKm: 0.8 },
+    alerts: [
+      {
+        title: "Pickpocket risk",
+        level: "medium",
+        description: "Keep valuables secure in crowded squares and transit hubs."
+      },
+      {
+        title: "Late-night transit",
+        level: "low",
+        description: "Use main stations after 22:00 for better lighting and staff."
+      }
+    ],
+    nightRiskAreas: ["Old Town Alleys", "Market District Backstreets"],
+    scamAlerts: ["Unofficial taxi meters", "Street bracelet vendors"]
   };
 
   const experiences: Experience[] = data.pois.slice(0, 6).map((p, i) => ({
@@ -234,30 +299,244 @@ export function generateMockTrip(input: TripFormInput): Trip {
     durationMin: p.duration
   }));
 
-  const fallbackName = input.to.split(",")[0]?.trim() || "Your destination";
+  const fallbackName = resolvedTo.split(",")[0]?.trim() || "Your destination";
   const destinationName = matched
     ? key === "newyork"
       ? "New York"
       : key[0].toUpperCase() + key.slice(1)
     : fallbackName;
 
+  const persona = personaFrom(resolvedStyles, resolvedBudget);
+  const budgetLabel = budgetTier(resolvedBudget);
+  const socialActivity = resolvedStyles.includes("Nightlife")
+    ? "high"
+    : resolvedStyles.includes("Relax & Wellness")
+      ? "low"
+      : "medium";
+  const memoryNote = input.memory?.lastDestination
+    ? `Last time you visited ${input.memory.lastDestination}, you leaned toward ${
+        input.memory.lastStyles?.join(", ") || "balanced"
+      } trips.`
+    : "We will remember your preferences for next time.";
+
+  const profile: UserProfile = {
+    persona,
+    summary: `${budgetLabel} budget profile with a ${numDays}-day pace focused on ${
+      resolvedStyles.slice(0, 2).join(" & ") || "iconic highlights"
+    }.`,
+    signals: [
+      { label: "Budget", value: `${resolvedBudget} ${resolvedCurrency}`, score: Math.min(100, Math.round(resolvedBudget / 30)) },
+      { label: "Travel Style", value: resolvedStyles.join(", ") || "Classic" },
+      { label: "Eco Interest", value: resolvedStyles.includes("Eco") ? "High" : "Medium", score: resolvedStyles.includes("Eco") ? 86 : 58 },
+      { label: "Luxury Preference", value: resolvedStyles.includes("Luxury") ? "High" : "Low", score: resolvedStyles.includes("Luxury") ? 84 : 38 },
+      { label: "Adventure Level", value: resolvedStyles.includes("Adventure") ? "High" : "Medium", score: resolvedStyles.includes("Adventure") ? 78 : 52 },
+      { label: "Food Focus", value: resolvedStyles.includes("Culture & Food") ? "High" : "Medium", score: resolvedStyles.includes("Culture & Food") ? 80 : 54 }
+    ],
+    memoryNote,
+    history: input.memory?.lastDestination ? [`Last trip: ${input.memory.lastDestination}`] : [],
+    socialActivity
+  };
+
+  const pricing: PricingSignal[] = [
+    {
+      type: "flight",
+      trend: "down",
+      impactUSD: Math.round(resolvedBudget * 0.18),
+      confidence: 74,
+      message: `Flight prices to ${destinationName} soften midweek. Book in 2 days to save.`
+    },
+    {
+      type: "hotel",
+      trend: resolvedStyles.includes("Luxury") ? "up" : "stable",
+      impactUSD: Math.round(resolvedBudget * 0.12),
+      confidence: 68,
+      message: "Hotel rates look best if you check in on a Tuesday or Wednesday."
+    },
+    {
+      type: "activity",
+      trend: "down",
+      impactUSD: 38,
+      confidence: 62,
+      message: "Popular tours have early-bird discounts before 10:00 AM."
+    }
+  ];
+
+  const optimizations: OptimizationTip[] = [
+    {
+      category: "budget",
+      message: "Swap one premium meal for a local market lunch to cut costs.",
+      savingsUSD: Math.round(resolvedBudget * 0.08)
+    },
+    {
+      category: "time",
+      message: "Take the riverside route on Day 2 to avoid rush-hour traffic.",
+      timeSavedMin: 45
+    },
+    {
+      category: "safety",
+      message: "Stick to main boulevards after 22:00; side streets are lower-lit.",
+      riskLevel: "medium"
+    },
+    {
+      category: "weather",
+      message: "A light rain window is expected midday; swap outdoor plans to morning.",
+      timeSavedMin: 30
+    },
+    {
+      category: "eco",
+      message: "Choose metro + walking for inner-city hops to reduce emissions.",
+      savingsUSD: 24
+    }
+  ];
+
+  const hiddenGems: HiddenGem[] = pickN(data.pois, 3, seed + 99).map((p, i) => ({
+    name: p.name,
+    type: `Hidden ${p.type}`,
+    description: `Low-crowd spot with local vibes: ${p.description}`,
+    coords: p.coords,
+    photo: p.photo,
+    popularityScore: 35 + (i * 7)
+  }));
+
+  const predictions: Prediction[] = [
+    {
+      type: "crowd",
+      message: "Crowd levels peak on Day 2 afternoon around main landmarks.",
+      confidence: 71
+    },
+    {
+      type: "delay",
+      message: "Morning transfers are smoother than late-evening airport runs.",
+      confidence: 64
+    },
+    {
+      type: "weather",
+      message: "A quick drizzle window is likely on Day 3; pack a light jacket.",
+      confidence: 58
+    }
+  ];
+
+  const copilot: CopilotEvent[] = [
+    {
+      id: `cp-${key}-1`,
+      time: "Today 09:20",
+      type: "weather",
+      message: "Rain expected at 16:00. Moving the sunset stop earlier.",
+      action: "Route updated"
+    },
+    {
+      id: `cp-${key}-2`,
+      time: "Today 12:10",
+      type: "transport",
+      message: "Metro Line 2 is crowded; suggested alternate tram route.",
+      action: "Alternate route"
+    },
+    {
+      id: `cp-${key}-3`,
+      time: "Today 18:40",
+      type: "safety",
+      message: "Crowd density elevated near the old town; stay on main streets.",
+      action: "Safety alert"
+    }
+  ];
+
+  const offline = {
+    status: "ready" as const,
+    lastSynced: new Date().toISOString().slice(0, 10),
+    sizeMB: 128
+  };
+
+  const marketplace: MarketplaceOffer[] = [
+    {
+      id: `mk-${key}-guide`,
+      title: `${destinationName} Local Guide (3h)`,
+      category: "guide",
+      priceUSD: 68,
+      rating: 4.8,
+      photo: data.pois[0]?.photo ?? data.coverImage,
+      provider: "Local Pathfinders"
+    },
+    {
+      id: `mk-${key}-driver`,
+      title: "Private Airport Transfer",
+      category: "driver",
+      priceUSD: 42,
+      rating: 4.7,
+      photo: data.coverImage,
+      provider: "CityRide Partners"
+    },
+    {
+      id: `mk-${key}-photo`,
+      title: "Sunset Photo Walk",
+      category: "photographer",
+      priceUSD: 55,
+      rating: 4.9,
+      photo: data.pois[1]?.photo ?? data.coverImage,
+      provider: "Frame & Lens"
+    },
+    {
+      id: `mk-${key}-hotel`,
+      title: "Eco Boutique Stay",
+      category: "hotel",
+      priceUSD: 120,
+      rating: 4.6,
+      photo: data.coverImage,
+      provider: "GreenKey Hotels"
+    },
+    {
+      id: `mk-${key}-food`,
+      title: "Chef-led Local Dinner",
+      category: "restaurant",
+      priceUSD: 34,
+      rating: 4.7,
+      photo: data.pois[2]?.photo ?? data.coverImage,
+      provider: "Taste of the City"
+    },
+    {
+      id: `mk-${key}-tour`,
+      title: "Hidden Gems Walking Tour",
+      category: "tour",
+      priceUSD: 28,
+      rating: 4.5,
+      photo: data.pois[3]?.photo ?? data.coverImage,
+      provider: "Secret Streets"
+    }
+  ];
+
+  const focusTags: string[] = [];
+  if (parsed.flags.eco) focusTags.push("eco-first");
+  if (parsed.flags.luxury) focusTags.push("luxury");
+  if (parsed.flags.hidden) focusTags.push("hidden gems");
+  if (resolvedStyles.includes("Adventure")) focusTags.push("adventure");
+  const focusNote = focusTags.length ? ` Focus: ${focusTags.join(", ")}.` : "";
+
   return {
     id: `trip-${Date.now()}`,
     destination: destinationName,
     country: data.country,
     coverImage: data.coverImage,
-    summary: `A ${numDays}-day curated journey through ${destinationName} blending ${input.styles
+    summary: `A ${numDays}-day curated journey through ${destinationName} blending ${resolvedStyles
       .slice(0, 2)
-      .join(" and ") || "iconic sights"}.`,
-    currency: input.currency,
+      .join(" and ") || "iconic sights"}.${focusNote}`,
+    currency: resolvedCurrency,
+    prompt: prompt || undefined,
+    profile,
     days,
     totalCostUSD: totalCost,
-    budgetUSD: input.budget,
+    budgetUSD: resolvedBudget,
     ecoScore,
     carbonKg,
     ecoTips,
+    eco,
     safety,
-    experiences
+    experiences,
+    pricing,
+    optimizations,
+    hiddenGems,
+    predictions,
+    copilot,
+    offline,
+    marketplace
   };
 }
 

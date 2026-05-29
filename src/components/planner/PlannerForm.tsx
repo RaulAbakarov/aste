@@ -13,7 +13,8 @@ import {
   CheckCircle2
 } from "lucide-react";
 import { useTripStore } from "@/lib/store";
-import type { TripStyle, TripFormInput } from "@/lib/types";
+import type { TripStyle, TripFormInput, TripMemory } from "@/lib/types";
+import { parsePrompt } from "@/lib/prompt";
 
 const STYLES: TripStyle[] = [
   "Culture & Food",
@@ -48,6 +49,22 @@ function maxDateISO(months = 24) {
   return d.toISOString().slice(0, 10);
 }
 
+function addDays(iso: string, days: number) {
+  const d = new Date(iso);
+  d.setDate(d.getDate() + days);
+  return d.toISOString().slice(0, 10);
+}
+
+function readMemory(): TripMemory | undefined {
+  if (typeof window === "undefined") return undefined;
+  try {
+    const raw = localStorage.getItem("aste.memory");
+    return raw ? (JSON.parse(raw) as TripMemory) : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 export function PlannerForm() {
   const { setTrip, setLoading, loading } = useTripStore();
   const [tripType, setTripType] = useState<"round" | "oneway">("round");
@@ -61,7 +78,10 @@ export function PlannerForm() {
   const [budget, setBudget] = useState(1200);
   const [currency, setCurrency] = useState("USD");
   const [styles, setStyles] = useState<TripStyle[]>(["Culture & Food", "Eco"]);
+  const [prompt, setPrompt] = useState("");
   const [error, setError] = useState<string | null>(null);
+
+  const parsedPrompt = prompt ? parsePrompt(prompt) : null;
 
   function swap() {
     setFrom(to);
@@ -70,6 +90,19 @@ export function PlannerForm() {
 
   function toggleStyle(s: TripStyle) {
     setStyles((cur) => (cur.includes(s) ? cur.filter((x) => x !== s) : [...cur, s]));
+  }
+
+  function applyPrompt() {
+    if (!parsedPrompt) return;
+    if (parsedPrompt.destination) setTo(parsedPrompt.destination);
+    if (parsedPrompt.budget) setBudget(parsedPrompt.budget);
+    if (parsedPrompt.currency) setCurrency(parsedPrompt.currency);
+    if (parsedPrompt.days) {
+      setEnd(addDays(startDate, Math.max(1, parsedPrompt.days) - 1));
+    }
+    if (parsedPrompt.styles.length > 0) {
+      setStyles(parsedPrompt.styles);
+    }
   }
 
   async function submit() {
@@ -88,7 +121,9 @@ export function PlannerForm() {
       travelers: { adults, children, infants },
       budget,
       currency,
-      styles
+      styles,
+      prompt: prompt || undefined,
+      memory: readMemory()
     };
     setLoading(true);
     setTrip(null);
@@ -101,6 +136,19 @@ export function PlannerForm() {
       const data = await res.json();
       if (!data.ok) throw new Error(data.error || "Generation failed");
       setTrip(data.trip);
+      if (typeof window !== "undefined") {
+        const memory: TripMemory = {
+          lastDestination: data.trip?.destination,
+          lastBudget: data.trip?.budgetUSD,
+          lastStyles: styles,
+          lastPrompt: prompt || undefined
+        };
+        try {
+          localStorage.setItem("aste.memory", JSON.stringify(memory));
+        } catch {
+          // ignore storage errors
+        }
+      }
     } catch (e: any) {
       setError(e.message);
     } finally {
@@ -133,6 +181,32 @@ export function PlannerForm() {
             {t === "round" ? "Round Trip" : "One Way"}
           </button>
         ))}
+      </div>
+
+      {/* Prompt */}
+      <div className="mb-5">
+        <label className="label">Describe your trip</label>
+        <textarea
+          className="input min-h-[92px] py-2.5"
+          value={prompt}
+          onChange={(e) => setPrompt(e.target.value)}
+          placeholder="Example: Plan a 4 day trip to Paris, eco-friendly, $300 budget, hidden places"
+        />
+        <div className="mt-2 flex items-center justify-between gap-2">
+          <p className="text-xs text-muted">
+            The prompt can override destination, budget, and styles.
+          </p>
+          <button type="button" onClick={applyPrompt} className="btn-outline text-xs px-3 py-1.5">
+            Apply prompt
+          </button>
+        </div>
+        {parsedPrompt && (parsedPrompt.destination || parsedPrompt.days || parsedPrompt.budget) && (
+          <div className="mt-2 text-xs text-brand-ink">
+            Detected: {parsedPrompt.destination ?? ""}
+            {parsedPrompt.days ? ` · ${parsedPrompt.days} days` : ""}
+            {parsedPrompt.budget ? ` · ${parsedPrompt.budget} ${parsedPrompt.currency ?? currency}` : ""}
+          </div>
+        )}
       </div>
 
       {/* From / To with swap */}
